@@ -23,40 +23,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge Official Telegram & Protect Izugram/AyuGram Files
+      - name: Merge Official Telegram & Protect Files
         run: |
           git checkout -B telegram-update
-          HOST="github.com"
-          REPO="DrKLO/Telegram.git"
-          git fetch "https://${HOST}/${REPO}" master
-          
-          # Merge official Telegram without auto-committing
-          git merge FETCH_HEAD --no-commit --no-ff || true
-
-          # Auto-protect Izugram branding, workflows, and AyuGram core scripts
+          git fetch "https://github.com" master
+          git merge FETCH_HEAD --allow-unrelated-histories --no-commit --no-ff || true
           git checkout --ours .github/ gradle.properties tlrpc-patch.py TMessagesProj/build.gradle TMessagesProj/google-services.json || true
-          git checkout --ours TMessagesProj/src/main/res/mipmap-hdpi/ TMessagesProj/src/main/res/mipmap-mdpi/ TMessagesProj/src/main/res/mipmap-xhdpi/ TMessagesProj/src/main/res/mipmap-xxhdpi/ TMessagesProj/src/main/res/mipmap-xxxhdpi/ || true
-          
-          # Accept official Telegram's new native C++ core
+          git checkout --ours TMessagesProj/src/main/res/mipmap-*/ || true
           git checkout --theirs TMessagesProj/jni/ || true
-
-          # Stage and commit (remaining conflicts stay marked for your PR review)
           git add -A
           git commit -m "WIP: Update Telegram base (Branding & AyuGram protected)" || true
 
       - name: Push telegram-update Branch
         run: |
-          HOST="github.com"
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@${HOST}/${{ github.repository }}.git" telegram-update --force
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@://github.com{{ github.repository }}.git" telegram-update --force
 
-      - name: Open Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: rewrite
-          branch: telegram-update
-          title: "Safe Update: Latest Official Telegram Base"
-          body: |
-            - **Protected automatically:** `.github/`, `build.gradle`, `gradle.properties`, `tlrpc-patch.py`, and app icons.
-            - **Updated automatically:** `TMessagesProj/jni/` (native C++ Telegram core).
-            - **Action needed:** Resolve any remaining `<<<<<<< HEAD` conflicts in Java files so both new Telegram code and `Ayu...` hooks stay intact.
+      - name: Create Pull Request via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create --base rewrite --head telegram-update --title "Safe Update: Latest Official Telegram Base" --body "Pulls latest DrKLO/Telegram into telegram-update while protecting custom files." || echo "PR already exists"
