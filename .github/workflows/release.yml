@@ -36,6 +36,10 @@ jobs:
 
       - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default includes the obsolete "tools" package.
+          # Install platform-tools here; pinned build packages are installed below.
+          packages: platform-tools
 
       - name: Install Android SDK packages
         shell: bash
@@ -63,7 +67,7 @@ jobs:
           new_package = "com.krsxh.izugram"
 
           # Update every source/import/config reference, then move the source tree.
-          text_suffixes = {".java", ".kt", ".xml", ".gradle", ".properties", ".md", ".txt", ".yml", ".yaml"}
+          text_suffixes = {".java", ".kt", ".xml", ".gradle", ".properties", ".md", ".txt", ".yml", ".yaml", ".json", ".pro", ".cfg"}
           for path in root.rglob("*"):
               if not path.is_file() or path.suffix not in text_suffixes:
                   continue
@@ -72,13 +76,17 @@ jobs:
               except (UnicodeDecodeError, OSError):
                   continue
               updated = text.replace(old_package, new_package)
-              if path.name == "strings.xml":
-                  # Replace only visible XML text nodes; keep resource IDs unchanged.
+              updated = updated.replace("com/radolyn/ayugram", "com/krsxh/izugram")
+              if path.suffix == ".xml":
+                  # Update user-facing resource text in every locale while preserving
+                  # resource names, IDs, attributes, and XML structure.
                   updated = re.sub(
                       r">([^<>]*)<",
-                      lambda m: ">" + re.sub(r"(?i)ayugram", "Izugram", m.group(1)) + "<",
+                      lambda m: ">" + re.sub(r"(?i)AyuGram", "Izugram", m.group(1)) + "<",
                       updated,
                   )
+              elif path.suffix == ".md":
+                  updated = re.sub(r"(?i)AyuGram", "Izugram", updated)
               if path.suffix in {".java", ".kt"}:
                   updated = re.sub(r"(?<![A-Za-z0-9_])AyuGram(?![A-Za-z0-9_])", "Izugram", updated)
               if updated != text:
@@ -93,6 +101,12 @@ jobs:
                   shutil.rmtree(old_dir)
               else:
                   shutil.move(str(old_dir), str(new_dir))
+
+          # Keep Room schema package paths aligned with the migrated Java package.
+          old_schema = root / "TMessagesProj/schemas/com.radolyn.ayugram.database.AyuDatabase"
+          new_schema = root / "TMessagesProj/schemas/com.krsxh.izugram.database.AyuDatabase"
+          if old_schema.exists() and not new_schema.exists():
+              old_schema.rename(new_schema)
           PY
 
       - name: Install native build dependencies
