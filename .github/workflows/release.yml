@@ -1,6 +1,10 @@
-name: Build release APK
+name: Build Izugram APK
+
 on:
   push:
+    branches:
+      - rewrite
+  workflow_dispatch:
 
 jobs:
   build:
@@ -10,25 +14,28 @@ jobs:
       CCACHE_NOHASHDIR: "true"
       CCACHE_MAXSIZE: "10G"
       CCACHE_HARDLINK: "true"
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           submodules: recursive
           fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
 
-      - uses: DamianReeves/write-file-action@master
-        with:
-          path: ./API_KEYS
-          contents: |
-            APP_ID = 27171616
-            APP_HASH = "b96a7b000e52a02f5eca8730676dbee0"
-            MAPS_V2_API = ${{ secrets.MAPS_KEY }}
-            
-            SIGNING_KEY_PASSWORD = ${{ secrets.CERT_KEY }}
-            SIGNING_KEY_ALIAS = ${{ secrets.CERT_KEY }}
-            SIGNING_KEY_STORE_PASSWORD = ${{ secrets.CERT_KEY }}
-          write-mode: overwrite
+      - name: Create API_KEYS
+        env:
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_STORE_PASSWORD: ${{ secrets.SIGNING_KEY_STORE_PASSWORD }}
+        run: |
+          {
+            printf 'APP_ID = 27171616\\n'
+            printf 'APP_HASH = "b96a7b000e52a02f5eca8730676dbee0"\\n'
+            printf 'MAPS_V2_API = ""\\n'
+            printf 'SIGNING_KEY_PASSWORD = %s\\n' "$SIGNING_KEY_PASSWORD"
+            printf 'SIGNING_KEY_ALIAS = %s\\n' "$SIGNING_KEY_ALIAS"
+            printf 'SIGNING_KEY_STORE_PASSWORD = %s\\n' "$SIGNING_KEY_STORE_PASSWORD"
+          } > API_KEYS
 
       - name: Update packages
         run: sudo apt-get update
@@ -36,9 +43,9 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-          cache: 'gradle'
+          cache: gradle
 
       - name: Cache Gradle Build
         uses: actions/cache@v3
@@ -63,14 +70,14 @@ jobs:
         run: |
           echo "Removing large packages"
           sudo apt-get update
-          sudo apt-get remove -y '^llvm-.*'
-          sudo apt-get remove -y 'php.*'
-          sudo apt-get remove -y '^mongodb-.*'
-          sudo apt-get remove -y '^mysql-.*'
-          sudo apt-get remove -y azure-cli firefox mono-devel libgl1-mesa-dri
+          sudo apt-get remove -y '^llvm-.*' || true
+          sudo apt-get remove -y 'php.*' || true
+          sudo apt-get remove -y '^mongodb-.*' || true
+          sudo apt-get remove -y '^mysql-.*' || true
+          sudo apt-get remove -y azure-cli firefox mono-devel libgl1-mesa-dri || true
           sudo apt-get autoremove -y
           sudo apt-get clean
-          
+
           echo "Removing large directories"
           sudo rm -rf /usr/share/dotnet/
           sudo rm -rf /usr/local/graalvm/
@@ -79,17 +86,21 @@ jobs:
           sudo rm -rf /usr/local/share/chromium
           sudo rm -rf /usr/local/lib/node_modules
           df -h
-          
-          sudo apt-get install bison gcc make curl ninja-build ccache -y
+
+          sudo apt-get install -y bison gcc make curl ninja-build ccache
+
+      - name: Verify signing keystore
+        run: test -s TMessagesProj/config/izugram-release.jks
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew assembleAfatRelease
+      - name: Build Izugram release
+        run: ./gradlew --no-daemon assembleAfatRelease
 
-      - name: Upload
+      - name: Upload Izugram APK
         uses: actions/upload-artifact@v3
         with:
-          name: Release APK
+          name: Izugram-Release-APK
           path: TMessagesProj/build/outputs/apk/afat/release/*.apk
+          if-no-files-found: error
