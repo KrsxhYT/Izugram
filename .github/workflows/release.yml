@@ -6,7 +6,6 @@ on:
       - rewrite
   workflow_dispatch:
 
-# Keep only the newest queued build for this branch.
 concurrency:
   group: izugram-android-${{ github.ref }}
   cancel-in-progress: true
@@ -16,7 +15,6 @@ permissions:
 
 jobs:
   build:
-    # The old self-hosted label caused runs to wait forever when no runner was online.
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -24,7 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # The upstream proprietary submodule is private and is replaced
+          # by local compile-compatible stubs in this repository.
+          submodules: false
           fetch-depth: 0
 
       - name: Set up Java 17
