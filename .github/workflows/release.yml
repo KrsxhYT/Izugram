@@ -68,7 +68,13 @@ jobs:
                   continue
               updated = text.replace(old_package, new_package)
               if path.name == "strings.xml":
-                  updated = re.sub(r"(?i)ayugram", "Izugram", updated)
+                  # Replace only visible XML text nodes; keep resource IDs unchanged.
+                  updated = re.sub(
+                      r">([^<>]*)ayugram([^<>]*)<",
+                      lambda m: ">" + re.sub(r"(?i)ayugram", "Izugram", m.group(1) + "ayugram" + m.group(2)) + "<",
+                      updated,
+                      flags=re.IGNORECASE,
+                  )
               if path.suffix in {".java", ".kt"}:
                   updated = re.sub(r"(?<![A-Za-z0-9_])AyuGram(?![A-Za-z0-9_])", "Izugram", updated)
               if updated != text:
