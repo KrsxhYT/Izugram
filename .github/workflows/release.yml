@@ -6,21 +6,41 @@ on:
       - rewrite
   workflow_dispatch:
 
+# Keep only the newest queued build for this branch.
+concurrency:
+  group: izugram-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: self-hosted
-    env:
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_MAXSIZE: "10G"
-      CCACHE_HARDLINK: "true"
+    # The old self-hosted label caused runs to wait forever when no runner was online.
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bison gcc make curl ninja-build ccache
 
       - name: Create API_KEYS
         env:
@@ -28,6 +48,9 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_STORE_PASSWORD: ${{ secrets.SIGNING_KEY_STORE_PASSWORD }}
         run: |
+          test -n "$SIGNING_KEY_PASSWORD"
+          test -n "$SIGNING_KEY_ALIAS"
+          test -n "$SIGNING_KEY_STORE_PASSWORD"
           {
             printf 'APP_ID = 27171616\n'
             printf 'APP_HASH = "b96a7b000e52a02f5eca8730676dbee0"\n'
@@ -37,69 +60,17 @@ jobs:
             printf 'SIGNING_KEY_STORE_PASSWORD = %s\n' "$SIGNING_KEY_STORE_PASSWORD"
           } > API_KEYS
 
-      - name: Update packages
-        run: sudo apt-get update
-
-      - name: Setup Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
-
-      - name: Cache Gradle Build
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches/build-cache-*
-            ~/.gradle/buildOutputCleanup/cache.properties
-          key: gradle-builds-${{ github.sha }}
-          restore-keys: |
-            gradle-builds
-
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ccache
-          restore-keys: ccache
-
-      - name: Setup Android SDK Tools
-        uses: android-actions/setup-android@v2
-
-      - name: Prepare Environment
-        run: |
-          echo "Removing large packages"
-          sudo apt-get update
-          sudo apt-get remove -y '^llvm-.*' || true
-          sudo apt-get remove -y 'php.*' || true
-          sudo apt-get remove -y '^mongodb-.*' || true
-          sudo apt-get remove -y '^mysql-.*' || true
-          sudo apt-get remove -y azure-cli firefox mono-devel libgl1-mesa-dri || true
-          sudo apt-get autoremove -y
-          sudo apt-get clean
-
-          echo "Removing large directories"
-          sudo rm -rf /usr/share/dotnet/
-          sudo rm -rf /usr/local/graalvm/
-          sudo rm -rf /usr/local/.ghcup/
-          sudo rm -rf /usr/local/share/powershell
-          sudo rm -rf /usr/local/share/chromium
-          sudo rm -rf /usr/local/lib/node_modules
-          df -h
-
-          sudo apt-get install -y bison gcc make curl ninja-build ccache
-
       - name: Verify signing keystore
         run: test -s TMessagesProj/config/izugram-release.jks
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission for Gradle
         run: chmod +x gradlew
 
       - name: Build Izugram release
-        run: ./gradlew --no-daemon assembleAfatRelease
+        run: ./gradlew --no-daemon --stacktrace assembleAfatRelease
 
       - name: Upload Izugram APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Izugram-Release-APK
           path: TMessagesProj/build/outputs/apk/afat/release/*.apk
