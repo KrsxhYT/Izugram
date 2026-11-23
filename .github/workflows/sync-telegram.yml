@@ -16,6 +16,7 @@ jobs:
         with:
           ref: rewrite
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Configure Git
         run: |
@@ -25,26 +26,28 @@ jobs:
       - name: Merge Official Telegram & Protect Izugram/AyuGram Files
         run: |
           git checkout -B telegram-update
-          git remote add official https://github.com
-          git fetch official master
+          HOST="github.com"
+          REPO="DrKLO/Telegram.git"
+          git fetch "https://${HOST}/${REPO}" master
           
-          # Start merge without auto-committing
-          git merge official/master --no-commit --no-ff || true
+          # Merge official Telegram without auto-committing
+          git merge FETCH_HEAD --no-commit --no-ff || true
 
           # Auto-protect Izugram branding, workflows, and AyuGram core scripts
           git checkout --ours .github/ gradle.properties tlrpc-patch.py TMessagesProj/build.gradle TMessagesProj/google-services.json || true
           git checkout --ours TMessagesProj/src/main/res/mipmap-hdpi/ TMessagesProj/src/main/res/mipmap-mdpi/ TMessagesProj/src/main/res/mipmap-xhdpi/ TMessagesProj/src/main/res/mipmap-xxhdpi/ TMessagesProj/src/main/res/mipmap-xxxhdpi/ || true
           
-          # Accept official Telegram's new protocol/C++ layers
+          # Accept official Telegram's new native C++ core
           git checkout --theirs TMessagesProj/jni/ || true
 
-          # Stage everything (remaining conflicts will stay marked for your review)
+          # Stage and commit (remaining conflicts stay marked for your PR review)
           git add -A
           git commit -m "WIP: Update Telegram base (Branding & AyuGram protected)" || true
 
       - name: Push telegram-update Branch
         run: |
-          git push -u origin telegram-update --force
+          HOST="github.com"
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@${HOST}/${{ github.repository }}.git" telegram-update --force
 
       - name: Open Pull Request
         uses: peter-evans/create-pull-request@v6
@@ -56,5 +59,4 @@ jobs:
           body: |
             - **Protected automatically:** `.github/`, `build.gradle`, `gradle.properties`, `tlrpc-patch.py`, and app icons.
             - **Updated automatically:** `TMessagesProj/jni/` (native C++ Telegram core).
-            - **Action needed:** Resolve any remaining `<<<<<<< HEAD` conflicts in Java files (like `MessagesController.java` or `ChatActivity.java`) so both new Telegram code and `Ayu...` hooks stay intact.
-            
+            - **Action needed:** Resolve any remaining `<<<<<<< HEAD` conflicts in Java files so both new Telegram code and `Ayu...` hooks stay intact.
