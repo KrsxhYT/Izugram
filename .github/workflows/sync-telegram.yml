@@ -1,0 +1,60 @@
+name: Sync Official Telegram (Safe Branding)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Izugram (rewrite)
+        uses: actions/checkout@v4
+        with:
+          ref: rewrite
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge Official Telegram & Protect Izugram/AyuGram Files
+        run: |
+          git checkout -B telegram-update
+          git remote add official https://github.com
+          git fetch official master
+          
+          # Start merge without auto-committing
+          git merge official/master --no-commit --no-ff || true
+
+          # Auto-protect Izugram branding, workflows, and AyuGram core scripts
+          git checkout --ours .github/ gradle.properties tlrpc-patch.py TMessagesProj/build.gradle TMessagesProj/google-services.json || true
+          git checkout --ours TMessagesProj/src/main/res/mipmap-hdpi/ TMessagesProj/src/main/res/mipmap-mdpi/ TMessagesProj/src/main/res/mipmap-xhdpi/ TMessagesProj/src/main/res/mipmap-xxhdpi/ TMessagesProj/src/main/res/mipmap-xxxhdpi/ || true
+          
+          # Accept official Telegram's new protocol/C++ layers
+          git checkout --theirs TMessagesProj/jni/ || true
+
+          # Stage everything (remaining conflicts will stay marked for your review)
+          git add -A
+          git commit -m "WIP: Update Telegram base (Branding & AyuGram protected)" || true
+
+      - name: Push telegram-update Branch
+        run: |
+          git push -u origin telegram-update --force
+
+      - name: Open Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: rewrite
+          branch: telegram-update
+          title: "Safe Update: Latest Official Telegram Base"
+          body: |
+            - **Protected automatically:** `.github/`, `build.gradle`, `gradle.properties`, `tlrpc-patch.py`, and app icons.
+            - **Updated automatically:** `TMessagesProj/jni/` (native C++ Telegram core).
+            - **Action needed:** Resolve any remaining `<<<<<<< HEAD` conflicts in Java files (like `MessagesController.java` or `ChatActivity.java`) so both new Telegram code and `Ayu...` hooks stay intact.
+            
