@@ -34,8 +34,10 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.1" "ndk;21.4.7075529" "cmake;3.10.2"
 
       - name: Install native build dependencies
         run: |
