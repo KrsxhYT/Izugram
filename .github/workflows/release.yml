@@ -34,10 +34,56 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Install Android SDK components
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-33
+            build-tools;33.0.1
+            ndk;21.4.7075529
+            cmake;3.10.2
+
+      - name: Apply Izugram package and branding
+        shell: bash
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.1" "ndk;21.4.7075529" "cmake;3.10.2"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import shutil
+
+          root = Path.cwd()
+          java_root = root / "TMessagesProj/src/main/java"
+          old_package = "com.radolyn.ayugram"
+          new_package = "com.krsxh.izugram"
+
+          # Update every source/import/config reference, then move the source tree.
+          text_suffixes = {".java", ".kt", ".xml", ".gradle", ".properties", ".md", ".txt", ".yml", ".yaml"}
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix not in text_suffixes:
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, OSError):
+                  continue
+              updated = text.replace(old_package, new_package)
+              if path.name == "strings.xml":
+                  updated = re.sub(r"(?i)ayugram", "Izugram", updated)
+              if path.suffix in {".java", ".kt"}:
+                  updated = re.sub(r"(?<![A-Za-z0-9_])AyuGram(?![A-Za-z0-9_])", "Izugram", updated)
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+
+          old_dir = java_root / "com/radolyn/ayugram"
+          new_dir = java_root / "com/krsxh/izugram"
+          if old_dir.exists():
+              new_dir.parent.mkdir(parents=True, exist_ok=True)
+              if new_dir.exists():
+                  shutil.copytree(old_dir, new_dir, dirs_exist_ok=True)
+                  shutil.rmtree(old_dir)
+              else:
+                  shutil.move(str(old_dir), str(new_dir))
+          PY
 
       - name: Install native build dependencies
         run: |
